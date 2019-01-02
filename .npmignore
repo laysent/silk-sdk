@@ -1,0 +1,4 @@
+build
+doc
+node_modules
+.gitignore
