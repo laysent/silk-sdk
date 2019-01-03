@@ -3,10 +3,10 @@
     {
       "target_name": "silk",
       "sources": [
-        "test/main.c",
-        "test/Decoder.c",
-        "test/Encoder.c",
-        "test/signalCompare.c",
+        "api/main.c",
+        "api/Decoder.c",
+        "api/Encoder.c",
+        "api/signalCompare.c",
         "src/SKP_Silk_A2NLSF.c",
         "src/SKP_Silk_ana_filt_bank_1.c",
         "src/SKP_Silk_apply_sine_window.c",
