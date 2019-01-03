@@ -136,13 +136,58 @@ napi_value Encode_Entry(napi_env env, napi_callback_info info) {
   return NULL;
 }
 
+napi_value Compare_Entry(napi_env env, napi_callback_info info) {
+  char testInFileName[150], refInFileName[150];
+  napi_status status;
+
+  size_t length = 0;
+  size_t argc = 3;
+  napi_value args[3];
+  status = napi_get_cb_info(env, info, &argc, args, NULL, NULL);
+  assert(status == napi_ok);
+
+  if (argc < 2) {
+    napi_throw_error(env, NULL, "Wrong number of arguments");
+    return NULL;
+  }
+
+  /* get arguments */
+  status = napi_get_value_string_utf8(env, args[0], refInFileName, 150, &length);
+  assert(status == napi_ok);
+
+  status = napi_get_value_string_utf8(env, args[1], testInFileName, 150, &length);
+  assert(status == napi_ok);
+
+  bool hasProperty = false;
+  napi_value value;
+  napi_value key;
+
+  bool useDiff = false;
+  bool quiet = true;
+  int Fs_Hz = 24000;
+  if (argc > 2) {
+    READ_PROP("diff", useDiff, napi_get_value_bool);
+    READ_PROP("fs", Fs_Hz, napi_get_value_int32);
+    READ_PROP("quiet", quiet, napi_get_value_bool);
+  }
+
+  bool result = Compare(env, refInFileName, testInFileName, useDiff ? 1 : 0, Fs_Hz, quiet ? 1 : 0);
+  napi_value ret;
+
+  status = napi_get_boolean(env, result, &ret);
+  assert(status == napi_ok);
+
+  return ret;
+}
+
 napi_value Init(napi_env env, napi_value exports) {
   napi_status status;
   napi_property_descriptor desc[] = {
     DECLARE_NAPI_METHOD("decode", Decode_Entry),
     DECLARE_NAPI_METHOD("encode", Encode_Entry),
+    DECLARE_NAPI_METHOD("compare", Compare_Entry),
   };
-  status = napi_define_properties(env, exports, 2, desc);
+  status = napi_define_properties(env, exports, 3, desc);
   assert(status == napi_ok);
   return exports;
 }

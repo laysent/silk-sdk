@@ -30,4 +30,13 @@ void Encode(
   SKP_int32 tencent_amr
 );
 
+int Compare(
+  napi_env env,
+  char* refInFileName,
+  char* testInFileName,
+  SKP_int32 diff,
+  SKP_int32 fs,
+  SKP_int32 quiet
+);
+
 #endif
