@@ -2,6 +2,20 @@
 
 This is node-gyp version of Silk SDK library (see <https://developer.skype.com/silk> for details.)
 
+## Installation
+
+To install this package, please run:
+
+```bash
+npm install silk-sdk
+```
+
+or
+
+```bash
+yarn add silk-sdk
+```
+
 ## API Usage
 
 ### decode(input, output, options)
@@ -25,7 +39,7 @@ Below are possible options for `decode`.
 Example usage:
 
 ```javascript
-const silk = require('silk');
+const silk = require('silk-sdk');
 silk.decode('./input.silk', './output.pcm', { quiet: true });
 ```
 
@@ -58,7 +72,7 @@ Below are possible options for `encode`.
 Example usage:
 
 ```javascript
-const silk = require('silk');
+const silk = require('silk-sdk');
 silk.encode('./input.pcm', './output.silk', { quiet: true });
 ```
 
@@ -83,7 +97,7 @@ Below are possible options for `compare`.
 Example usage:
 
 ```javascript
-const silk = require('silk');
+const silk = require('silk-sdk');
 silk.compare('./ref.pcm', './test.pcm', { quiet: true });
 ```
 
