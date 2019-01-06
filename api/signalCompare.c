@@ -84,13 +84,13 @@ void Bwexpander(
 }
 #endif
 
-int Compare(napi_env env, char* refInFileName, char* testInFileName, SKP_int32 diff, SKP_int32 Fs_Hz, SKP_int32 quiet)
+int Compare(napi_env env, void* refInStream, size_t refTotal, void* testInStream, size_t testTotal, SKP_int32 diff, SKP_int32 Fs_Hz, SKP_int32 quiet)
 {
     SKP_int   n, i, counterRef, counterTest;
-    FILE      *refInFile, *testInFile;
     SKP_int   nFrames = 0, isUnequal = 0;
     SKP_int   Fs_kHz;
     SKP_float c, refWhtnd, testWhtnd, refNrg, diffNrg;
+    size_t refIndex = 0, testIndex = 0;
     double    SNR = 0.0;
     SKP_int16 refIn[WIN_LENGTH_MS * MAX_FS_KHZ], testIn[WIN_LENGTH_MS * MAX_FS_KHZ];
     SKP_float refWin[WIN_LENGTH_MS * MAX_FS_KHZ];
@@ -105,35 +105,22 @@ int Compare(napi_env env, char* refInFileName, char* testInFileName, SKP_int32 d
         return 0;
     }
 
-    if (quiet == 0) printf("Reference:  %s\n", refInFileName);
-    //printf("Test:       %s\n", testInFileName);
-
-    /* open files */
-    refInFile = fopen(refInFileName, "rb");
-    if (refInFile==NULL) {
-        sprintf(error_message, "Error: could not open input file %s\n", refInFileName);
-        napi_throw_error(env, NULL, error_message);
-        return 0;
-    } 
-    testInFile = fopen(testInFileName, "rb");
-    if (testInFile==NULL) {
-        sprintf(error_message, "Error: could not open input file %s\n", testInFileName);
-        napi_throw_error(env, NULL, error_message);
-        return 0;
-    }
-
     SKP_memset( refIn,  0, sizeof(refIn) );
     SKP_memset( testIn, 0, sizeof(testIn) );
 
     while(1) {
         /* Read inputs */
-        counterRef  = (SKP_int)fread(&refIn[(WIN_LENGTH_MS - FRAME_LENGTH_MS) * Fs_kHz], 
-            sizeof(SKP_int16), FRAME_LENGTH_MS * Fs_kHz, refInFile);
-        counterTest = (SKP_int)fread(&testIn[(WIN_LENGTH_MS - FRAME_LENGTH_MS) * Fs_kHz], 
-            sizeof(SKP_int16), FRAME_LENGTH_MS * Fs_kHz, testInFile);
-        if(counterRef != FRAME_LENGTH_MS * Fs_kHz || counterTest != FRAME_LENGTH_MS * Fs_kHz){
+        counterRef = (FRAME_LENGTH_MS * Fs_kHz) * sizeof(SKP_int16);
+        counterTest = (FRAME_LENGTH_MS * Fs_kHz) * sizeof(SKP_int16);
+        if ((counterTest + testIndex > testTotal) || (counterRef + refIndex > refTotal)) {
+            if (counterTest + testIndex > testTotal) counterTest = (testTotal - testIndex) / sizeof(SKP_int16);
+            if (counterRef + refIndex > refTotal) counterRef = (refTotal - refIndex) / sizeof(SKP_int16);
             break;
         }
+        memcpy(&refIn[(WIN_LENGTH_MS - FRAME_LENGTH_MS) * Fs_kHz], &refInStream[refIndex], counterRef);
+        memcpy(&testIn[(WIN_LENGTH_MS - FRAME_LENGTH_MS) * Fs_kHz], &testInStream[testIndex], counterTest);
+        refIndex += counterRef;
+        testIndex += counterTest;
 
         /* test for bit-exactness */
         for( n = 0; n < FRAME_LENGTH_MS * Fs_kHz; n++ ) {
@@ -189,10 +176,6 @@ int Compare(napi_env env, char* refInFileName, char* testInFileName, SKP_int32 d
         SKP_memmove( refIn,  &refIn[FRAME_LENGTH_MS * Fs_kHz],  (WIN_LENGTH_MS - FRAME_LENGTH_MS) * Fs_kHz * sizeof(SKP_int16));
         SKP_memmove( testIn, &testIn[FRAME_LENGTH_MS * Fs_kHz], (WIN_LENGTH_MS - FRAME_LENGTH_MS) * Fs_kHz * sizeof(SKP_int16));
     }
-
-    /* Close Files */
-    fclose(refInFile);
-    fclose(testInFile);
 
     if( diff ) {
         if( isUnequal ) {

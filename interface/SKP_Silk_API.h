@@ -4,19 +4,19 @@
 #include <node_api.h>
 #include "SKP_Silk_typedef.h"
 
-void Decode(
+napi_value Decode(
   napi_env env,
-  char* bitInFileName,
-  char* speechOutFileName,
+  void* inStream,
+  size_t total,
   SKP_int32 quiet,
   SKP_float loss_prob,
   SKP_int32 API_Fs_Hz
 );
 
-void Encode(
+napi_value Encode(
   napi_env env,
-  char* speechInFileName,
-  char* bitOutFileName,
+  void* inStream,
+  size_t total,
   SKP_int32 API_Fs_Hz,
   SKP_int32 max_internal_fs_Hz,
   SKP_int32 packetSize_ms,
@@ -32,8 +32,10 @@ void Encode(
 
 int Compare(
   napi_env env,
-  char* refInFileName,
-  char* testInFileName,
+  void* refInStream,
+  size_t refTotal,
+  void* testInStream,
+  size_t testTotal,
   SKP_int32 diff,
   SKP_int32 fs,
   SKP_int32 quiet

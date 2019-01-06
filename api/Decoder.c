@@ -75,6 +75,17 @@ void decoder_swap_endian(
 #include <sys/time.h>
 #endif
 
+#define WRITE_DECODE_OUTPUT(input, length) \
+    output_temp_pointer = output; \
+    output = malloc(size + (length)); \
+    if (output_temp_pointer != NULL) { \
+        memcpy(output, output_temp_pointer, size); \
+        free(output_temp_pointer); \
+    } \
+    memcpy(&output[size], (input), (length)); \
+    size += (length);
+
+
 #ifdef _WIN32
 
 unsigned long DecoderGetHighResolutionTime() /* O: time in usec*/
@@ -100,11 +111,12 @@ unsigned long DecoderGetHighResolutionTime() /* O: time in usec*/
 /* Seed for the random number generator, which is used for simulating packet loss */
 static SKP_int32 rand_seed = 1;
 
-void Decode(napi_env env, char* bitInFileName, char* speechOutFileName, SKP_int32 quiet, SKP_float loss_prob, SKP_int32 API_Fs_Hz)
+napi_value Decode(napi_env env, void* inStream, size_t total, SKP_int32 quiet, SKP_float loss_prob, SKP_int32 API_Fs_Hz)
 {
     unsigned long tottime, starttime;
     double    filetime;
-    size_t    counter;
+    size_t    index = 0, size = 0;
+    void *output = NULL, *output_temp_pointer;
     SKP_int32 totPackets, i, k;
     SKP_int16 ret, len, tot_len;
     SKP_int16 nBytes;
@@ -114,7 +126,6 @@ void Decode(napi_env env, char* bitInFileName, char* speechOutFileName, SKP_int3
     SKP_int16 nBytesFEC;
     SKP_int16 nBytesPerPacket[ DECODER_MAX_LBRR_DELAY + 1 ], totBytes;
     SKP_int16 out[ ( ( DECODER_FRAME_LENGTH_MS * DECODER_MAX_API_FS_KHZ ) << 1 ) * DECODER_MAX_INPUT_FRAMES ], *outPtr;
-    FILE      *bitInFile, *speechOutFile;
     SKP_int32 packetSize_ms=0;
     SKP_int32 decSizeBytes;
     char      error_message[250];
@@ -125,16 +136,7 @@ void Decode(napi_env env, char* bitInFileName, char* speechOutFileName, SKP_int3
     if( !quiet ) {
         printf("********** Silk Decoder (Fixed Point) v %s ********************\n", SKP_Silk_SDK_get_version());
         printf("********** Compiled for %d bit cpu *******************************\n", (int)sizeof(void*) * 8 );
-        printf( "Input:                    %s\n", bitInFileName );
-        printf( "Output:                   %s\n", speechOutFileName );
-    }
-
-    /* Open files */
-    bitInFile = fopen( bitInFileName, "rb" );
-    if( bitInFile == NULL ) {
-        sprintf(error_message, "Error: could not open input file %s\n", bitInFileName);
-        napi_throw_error(env, NULL, error_message);
-        return;
+        printf( "Input Stream Length:      %zu\n", total );
     } 
 
     /* Check Silk header */
@@ -144,7 +146,8 @@ void Decode(napi_env env, char* bitInFileName, char* speechOutFileName, SKP_int3
         int maybe_silk = 0;
 
         /* Tencent variant of Silk codec, check if first byte is 0x02 */
-        fread(header_buf, sizeof(char), 1, bitInFile);
+        memcpy(header_buf, &inStream[index], sizeof(char) * 1);
+        index += (sizeof(char) * 1);
 
         /* Silk header is one of the following: #!SILK_V3 or .#!SILK_V3 or #!AMR\n.#!SILK_V3, where . = 0x02 */
         if (header_buf[0] == 0x02) {
@@ -154,7 +157,8 @@ void Decode(napi_env env, char* bitInFileName, char* speechOutFileName, SKP_int3
 
         } else if (header_buf[0] == '#') {
             
-            fread(header_buf, sizeof(char), 2, bitInFile);
+            memcpy(header_buf, &inStream[index], sizeof(char) * 2);
+            index += (sizeof(char) * 2);
             header_buf[2] = '\0'; /* Terminate null character */
 
             if (strcmp(header_buf, "!A") == 0) {
@@ -168,24 +172,18 @@ void Decode(napi_env env, char* bitInFileName, char* speechOutFileName, SKP_int3
 
         if (maybe_silk != 1) {
             napi_throw_error(env, NULL, "Error: Wrong Header\n");
-            return;
+            return NULL;
         }
 
-        counter = fread(header_buf, sizeof(char), strlen(magic_number), bitInFile);
+        memcpy(header_buf, &inStream[index], sizeof(char) * strlen(magic_number));
+        index += (sizeof(char) * strlen(magic_number));
         header_buf[strlen(magic_number)] = '\0'; /* Terminate with a null character */
         if (strcmp(header_buf, magic_number) != 0) { 
             /* Non-equal strings */
             sprintf(error_message, "Error: Wrong Header %s\n", header_buf);
             napi_throw_error(env, NULL, error_message);
-            return;
+            return NULL;
         }
-    }
-
-    speechOutFile = fopen( speechOutFileName, "wb" );
-    if( speechOutFile == NULL ) {
-        sprintf(error_message, "Error: could not open output file %s\n", speechOutFileName);
-        napi_throw_error(env, NULL, error_message);
-        return;
     }
 
     /* Set the samplingrate that is requested for the output */
@@ -218,16 +216,18 @@ void Decode(napi_env env, char* bitInFileName, char* speechOutFileName, SKP_int3
     /* Simulate the jitter buffer holding MAX_FEC_DELAY packets */
     for( i = 0; i < DECODER_MAX_LBRR_DELAY; i++ ) {
         /* Read payload size */
-        counter = fread( &nBytes, sizeof( SKP_int16 ), 1, bitInFile );
+        memcpy(&nBytes, &inStream[index], sizeof(SKP_int16) * 1);
+        index += (sizeof(SKP_int16) * 1);
 #ifdef _SYSTEM_IS_BIG_ENDIAN
         decoder_swap_endian( &nBytes, 1 );
 #endif
         /* Read payload */
-        counter = fread( payloadEnd, sizeof( SKP_uint8 ), nBytes, bitInFile );
-
-        if( ( SKP_int16 )counter < nBytes ) {
+        if (index + (nBytes * sizeof(SKP_uint8)) > total) {
             break;
         }
+        memcpy(payloadEnd, &inStream[index], nBytes * sizeof(SKP_uint8));
+        index += (nBytes * sizeof(SKP_uint8));
+
         nBytesPerPacket[ i ] = nBytes;
         payloadEnd          += nBytes;
         totPackets++;
@@ -235,23 +235,26 @@ void Decode(napi_env env, char* bitInFileName, char* speechOutFileName, SKP_int3
 
     while( 1 ) {
         /* Read payload size */
-        counter = fread( &nBytes, sizeof( SKP_int16 ), 1, bitInFile );
+        if (index + (1 * sizeof(SKP_int16)) > total) {
+            break;
+        }
+        memcpy(&nBytes, &inStream[index], sizeof(SKP_int16) * 1);
+        index += (sizeof(SKP_int16) * 1);
 #ifdef _SYSTEM_IS_BIG_ENDIAN
         decoder_swap_endian( &nBytes, 1 );
 #endif
-        if( nBytes < 0 || counter < 1 ) {
-            break;
-        }
+        if (nBytes < 0) break;
         
         /* Read payload */
-        counter = fread( payloadEnd, sizeof( SKP_uint8 ), nBytes, bitInFile );
-        if( ( SKP_int16 )counter < nBytes ) {
+        if (index + (nBytes * sizeof(SKP_uint8)) > total) {
             break;
         }
+        memcpy(payloadEnd, &inStream[index], nBytes * sizeof(SKP_uint8));
+        index += (nBytes * sizeof(SKP_uint8));
 
         /* Simulate losses */
         rand_seed = SKP_RAND( rand_seed );
-        if( ( ( ( float )( ( rand_seed >> 16 ) + ( 1 << 15 ) ) ) / 65535.0f >= ( loss_prob / 100.0f ) ) && ( counter > 0 ) ) {
+        if( ( ( ( float )( ( rand_seed >> 16 ) + ( 1 << 15 ) ) ) / 65535.0f >= ( loss_prob / 100.0f ) ) && ( nBytes != 0 ) ) {
             nBytesPerPacket[ DECODER_MAX_LBRR_DELAY ] = nBytes;
             payloadEnd                       += nBytes;
         } else {
@@ -331,7 +334,7 @@ void Decode(napi_env env, char* bitInFileName, char* speechOutFileName, SKP_int3
 #ifdef _SYSTEM_IS_BIG_ENDIAN   
         decoder_swap_endian( out, tot_len );
 #endif
-        fwrite( out, sizeof( SKP_int16 ), tot_len, speechOutFile );
+        WRITE_DECODE_OUTPUT(out, sizeof(SKP_int16) * tot_len);
 
         /* Update buffer */
         totBytes = 0;
@@ -423,7 +426,7 @@ void Decode(napi_env env, char* bitInFileName, char* speechOutFileName, SKP_int3
 #ifdef _SYSTEM_IS_BIG_ENDIAN   
         decoder_swap_endian( out, tot_len );
 #endif
-        fwrite( out, sizeof( SKP_int16 ), tot_len, speechOutFile );
+        WRITE_DECODE_OUTPUT(out, sizeof(SKP_int16) * tot_len);
 
         /* Update Buffer */
         totBytes = 0;
@@ -446,15 +449,16 @@ void Decode(napi_env env, char* bitInFileName, char* speechOutFileName, SKP_int3
     /* Free decoder */
     free( psDec );
 
-    /* Close files */
-    fclose( speechOutFile );
-    fclose( bitInFile );
-
     filetime = totPackets * 1e-3 * packetSize_ms;
     if( !quiet ) {
         printf("\nFile length:              %.3f s", filetime);
         printf("\nTime for decoding:        %.3f s (%.3f%% of realtime)", 1e-6 * tottime, 1e-4 * tottime / filetime);
         printf("\n\n");
     }
-    return;
+
+    napi_status status;
+    napi_value result;
+    status = napi_create_buffer_copy(env, size, output, &output_temp_pointer, &result);
+    assert(status == napi_ok);
+    return result;
 }

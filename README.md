@@ -18,17 +18,66 @@ yarn add silk-sdk
 
 ## API Usage
 
-### decode(input, output, options)
+### decode
 
-Decode silk format audio.
+This API will decode silk format audio. It's return value and behavior will change depends on the
+parameters provided.
+
+#### Stream.Transform decode(options)
 
 | Parameter | Type   | Required | Description                             |
 | --------- | ------ | -------- | --------------------------------------- |
-| input     | string | true     | Bitstream input to decoder              |
-| output    | string | true     | Speech output from decoder              |
 | options   | object | false    | Optional options, see below for details |
 
-Below are possible options for `decode`.
+This API will return a transform stream, which can be used to consume input stream and generate
+decode stream.
+
+Exmaple usage:
+
+```javascript
+fs.createReadStream('input-path-here')
+  .pipe(silk.decode({ quiet: true }))
+  .pipe(fs.createWriteStream('output-path-here'));
+```
+
+#### buffer decode(input, options)
+
+| Parameter | Type          | Required | Description                             |
+| --------- | ------------- | -------- | --------------------------------------- |
+| input     | string/buffer | true     | Bitstream input to decoder              |
+| options   | object        | false    | Optional options, see below for details |
+
+For first parameter `input`, you can pass in either `string` or `buffer`. If `string` is provided,
+it will be used as path of file; if `buffer` is provided, it should be the buffer of input file.
+
+This API will return a decoded buffer that can be either saved in file or used by other APIs.
+
+Example usage:
+
+```javascript
+fs.writeFileSync(silk.decode('input-path-here', { quiet: true }));
+```
+
+#### void decode(input, output, options)
+
+| Parameter | Type          | Required | Description                             |
+| --------- | ------------- | -------- | --------------------------------------- |
+| input     | string/buffer | true     | Bitstream input to decoder              |
+| output    | string        | true     | Speech output (file path) from decoder  |
+| options   | object        | false    | Optional options, see below for details |
+
+For first parameter `input`, you can pass in either `string` or `buffer`. If `string` is provided,
+it will be used as path of file; if `buffer` is provided, it should be the buffer of input file.
+
+No return for this API, decode result will be saved to output path directly.
+
+Example usage:
+
+```javascript
+silk.decode('./input.silk', './output.pcm', { quiet: true });
+```
+
+#### Options
 
 | Attribute | Type    | Default | Description                              |
 | --------- | ------- | --------| ---------------------------------------- |
@@ -36,24 +85,67 @@ Below are possible options for `decode`.
 | lossProb  | float   | 0       | Simulated packet loss percentage (0-100) |
 | fsHz      | int     | 24000   | Sampling rate of output signal in Hz     |
 
-Example usage:
 
-```javascript
-const silk = require('silk-sdk');
-silk.decode('./input.silk', './output.pcm', { quiet: true });
-```
+### encode
 
-### encode(input, output, options)
+This API will encode speech input to silk format. It's return value and behavior will change depends
+on the parameters provided.
 
-Encode audio to silk format.
+#### Stream.Transform encode(options)
 
 | Parameter | Type   | Required | Description                             |
 | --------- | ------ | -------- | --------------------------------------- |
-| input     | string | true     | Speech input to encoder                 |
-| output    | string | true     | Bitstream output from encoder           |
 | options   | object | false    | Optional options, see below for details |
 
-Below are possible options for `encode`.
+This API will return a transform stream, which can be used to consume input stream and generate
+decode stream.
+
+Exmaple usage:
+
+```javascript
+fs.createReadStream('input-path-here')
+  .pipe(silk.encode({ quiet: true }))
+  .pipe(fs.createWriteStream('output-path-here'));
+```
+
+#### buffer encode(input, options)
+
+| Parameter | Type          | Required | Description                             |
+| --------- | ------------- | -------- | --------------------------------------- |
+| input     | string/buffer | true     | Speech input to encoder                 |
+| options   | object        | false    | Optional options, see below for details |
+
+For first parameter `input`, you can pass in either `string` or `buffer`. If `string` is provided,
+it will be used as path of file; if `buffer` is provided, it should be the buffer of input file.
+
+This API will return a encoded buffer that can be either saved in file or used by other APIs.
+
+Example usage:
+
+```javascript
+fs.writeFileSync(silk.encode('input-path-here', { quiet: true }));
+```
+
+#### void decode(input, output, options)
+
+| Parameter | Type          | Required | Description                             |
+| --------- | ------------- | -------- | --------------------------------------- |
+| input     | string/buffer | true     | Speech input to encoder                 |
+| output    | string        | true     | Bitstream output from encoder           |
+| options   | object        | false    | Optional options, see below for details |
+
+For first parameter `input`, you can pass in either `string` or `buffer`. If `string` is provided,
+it will be used as path of file; if `buffer` is provided, it should be the buffer of input file.
+
+No return for this API, encode result will be saved to output path directly.
+
+Example usage:
+
+```javascript
+silk.encode('./input.silk', './output.pcm', { quiet: true });
+```
+
+#### Options
 
 | Attribute     | Type    | Default | Description                                      |
 | ------------- | ------- | --------| ------------------------------------------------ |
@@ -69,22 +161,20 @@ Below are possible options for `encode`.
 | tencent       | boolean | false   | Add Tencent (Wechat, QQ) header in exported file |
 | tencentAmr    | boolean | false   | Add Tencent AMR header in exported file          |
 
-Example usage:
+### compare
 
-```javascript
-const silk = require('silk-sdk');
-silk.encode('./input.pcm', './output.silk', { quiet: true });
-```
-
-### compare(input, output, options)
+#### bool compare(input, output, stream)
 
 Compare two audio files.
 
-| Parameter | Type   | Required | Description                                                 |
-| --------- | ------ | -------- | ----------------------------------------------------------- |
-| inputA    | string | true     | Reference file                                              |
-| inputB    | string | true     | File to be tested, should be of same length as inputA (pcm) |
-| options   | object | false    | Optional options, see below for details                     |
+| Parameter | Type          | Required | Description                                                 |
+| --------- | ------------- | -------- | ----------------------------------------------------------- |
+| inputA    | string/buffer | true     | Reference file                                              |
+| inputB    | string/buffer | true     | File to be tested, should be of same length as inputA (pcm) |
+| options   | object        | false    | Optional options, see below for details                     |
+
+For both `inputA` and `inputB`, you can pass in either `string` or `buffer`. If `string` is provided,
+it will be used as path of file; if `buffer` is provided, it should be the buffer of input file.
 
 Below are possible options for `compare`.
 

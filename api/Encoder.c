@@ -34,6 +34,7 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #define _CRT_SECURE_NO_DEPRECATE    1
 #endif
 #include <node_api.h>
+#include <assert.h> 
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -93,10 +94,20 @@ unsigned long EncoderGetHighResolutionTime() /* O: time in usec*/
 }
 #endif // _WIN32
 
-void Encode(
+#define WRITE_ENCODE_OUTPUT(input, length) \
+    output_temp_pointer = output; \
+    output = malloc(size + (length)); \
+    if (output_temp_pointer != NULL) { \
+        memcpy(output, output_temp_pointer, size); \
+        free(output_temp_pointer); \
+    } \
+    memcpy(&output[size], (input), (length)); \
+    size += (length);
+
+napi_value Encode(
     napi_env env,
-    char* speechInFileName,
-    char* bitOutFileName,
+    void* inStream,
+    size_t total,
     SKP_int32 API_fs_Hz,
     SKP_int32 max_internal_fs_Hz,
     SKP_int32 packetSize_ms,
@@ -111,13 +122,13 @@ void Encode(
 ) {
     unsigned long tottime, starttime;
     double    filetime;
-    size_t    counter;
+    size_t    counter, index = 0, size = 0;
+    void *output = NULL, *output_temp_pointer;
     SKP_int32 k, totPackets, totActPackets, ret;
     SKP_int16 nBytes;
     double    sumBytes, sumActBytes, avg_rate, act_rate, nrg;
     SKP_uint8 payload[ ENCODER_MAX_BYTES_PER_FRAME * ENCODER_MAX_INPUT_FRAMES ];
     SKP_int16 in[ ENCODER_FRAME_LENGTH_MS * ENCODER_MAX_API_FS_KHZ * ENCODER_MAX_INPUT_FRAMES ];
-    FILE      *bitOutFile, *speechInFile;
     SKP_int32 encSizeBytes;
     void      *psEnc;
     char      error_message[250];
@@ -144,8 +155,7 @@ void Encode(
     if( !quiet ) {
         printf("********** Silk Encoder (Fixed Point) v %s ********************\n", SKP_Silk_SDK_get_version());
         printf("********** Compiled for %d bit cpu ******************************* \n", (int)sizeof(void*) * 8 );
-        printf( "Input:                          %s\n",     speechInFileName );
-        printf( "Output:                         %s\n",     bitOutFileName );
+        printf( "Input Stream Length:            %zu\n",     total );
         printf( "API sampling rate:              %d Hz\n",  API_fs_Hz );
         printf( "Maximum internal sampling rate: %d Hz\n",  max_internal_fs_Hz );
         printf( "Packet interval:                %d ms\n",  packetSize_ms );
@@ -155,33 +165,21 @@ void Encode(
         printf( "Target bitrate:                 %d bps\n", targetRate_bps );
     }
 
-    /* Open files */
-    speechInFile = fopen( speechInFileName, "rb" );
-    if( speechInFile == NULL ) {
-        sprintf(error_message, "Error: could not open input file %s\n", speechInFileName);
-        napi_throw_error(env, NULL, error_message);
-        return;
-    }
-    bitOutFile = fopen( bitOutFileName, "wb" );
-    if( bitOutFile == NULL ) {
-        sprintf(error_message, "Error: could not open output file %s\n", bitOutFileName);
-        napi_throw_error(env, NULL, error_message);
-        return;
-    }
-
     /* Add Silk header to stream */
     {
         static const char Tencent_amr_header[] = "#!AMR\n";
         static const char Tencent_header[] = "\x02";
         static const char Silk_header[] = "#!SILK_V3";
 
-        if (tencent_amr)
-            fwrite(Tencent_amr_header, sizeof(char), strlen(Tencent_amr_header), bitOutFile);
-        
-        if (tencent)
-            fwrite(Tencent_header, sizeof(char), strlen(Tencent_header), bitOutFile);
+        if (tencent_amr) {
+            WRITE_ENCODE_OUTPUT(Tencent_amr_header, sizeof(char) * strlen(Tencent_amr_header));
+        }
 
-        fwrite(Silk_header, sizeof(char), strlen(Silk_header), bitOutFile);
+        if (tencent) {
+            WRITE_ENCODE_OUTPUT(Tencent_header, sizeof(char) * strlen(Tencent_header));
+        }
+
+        WRITE_ENCODE_OUTPUT(Silk_header, sizeof(char) * strlen(Silk_header));
     }
 
     /* Create Encoder */
@@ -189,7 +187,7 @@ void Encode(
     if( ret ) {
         sprintf(error_message, "\nError: SKP_Silk_create_encoder returned %d\n", ret);
         napi_throw_error(env, NULL, error_message);
-        return;
+        return NULL;
     }
 
     psEnc = malloc( encSizeBytes );
@@ -199,7 +197,7 @@ void Encode(
     if( ret ) {
         sprintf(error_message, "\nError: SKP_Silk_reset_encoder returned %d\n", ret);
         napi_throw_error(env, NULL, error_message);
-        return;
+        return NULL;
     }
 
     /* Set Encoder parameters */
@@ -215,7 +213,7 @@ void Encode(
     if( API_fs_Hz > ENCODER_MAX_API_FS_KHZ * 1000 || API_fs_Hz < 0 ) {
         sprintf(error_message, "\nError: API sampling rate = %d out of range, valid range 8000 - 48000 \n \n", API_fs_Hz);
         napi_throw_error(env, NULL, error_message);
-        return;
+        return NULL;
     }
 
     tottime              = 0;
@@ -228,13 +226,13 @@ void Encode(
     
     while( 1 ) {
         /* Read input from file */
-        counter = fread( in, sizeof( SKP_int16 ), ( frameSizeReadFromFile_ms * API_fs_Hz ) / 1000, speechInFile );
+        counter = ( frameSizeReadFromFile_ms * API_fs_Hz ) / 1000;
+        if ((index + counter * sizeof(SKP_int16)) > total) break;
+        memcpy(in, &inStream[index], counter * sizeof(SKP_int16));
+        index += counter * sizeof(SKP_int16);
 #ifdef _SYSTEM_IS_BIG_ENDIAN
         encoder_swap_endian( in, counter );
 #endif
-        if( ( SKP_int )counter < ( ( frameSizeReadFromFile_ms * API_fs_Hz ) / 1000 ) ) {
-            break;
-        }
 
         /* max payload size */
         nBytes = ENCODER_MAX_BYTES_PER_FRAME * ENCODER_MAX_INPUT_FRAMES;
@@ -243,7 +241,7 @@ void Encode(
 
         /* Silk Encoder */
         ret = SKP_Silk_SDK_Encode( psEnc, &encControl, in, (SKP_int16)counter, payload, &nBytes );
-        if( ret ) {
+        if( ret && quiet == 0 ) {
             printf( "\nSKP_Silk_Encode returned %d", ret );
         }
 
@@ -273,13 +271,13 @@ void Encode(
 #ifdef _SYSTEM_IS_BIG_ENDIAN
             nBytes_LE = nBytes;
             encoder_swap_endian( &nBytes_LE, 1 );
-            fwrite( &nBytes_LE, sizeof( SKP_int16 ), 1, bitOutFile );
+            WRITE_ENCODE_OUTPUT(&nBytes_LE, sizeof(SKP_int16) * 1);
 #else
-            fwrite( &nBytes, sizeof( SKP_int16 ), 1, bitOutFile );
+            WRITE_ENCODE_OUTPUT(&nBytes, sizeof(SKP_int16) * 1);
 #endif
 
             /* Write payload */
-            fwrite( payload, sizeof( SKP_uint8 ), nBytes, bitOutFile );
+            WRITE_ENCODE_OUTPUT(payload, sizeof(SKP_uint8) * nBytes);
 
             smplsSinceLastPacket = 0;
         
@@ -294,14 +292,11 @@ void Encode(
 
     /* Write payload size */
     if (!tencent) {
-       fwrite( &nBytes, sizeof( SKP_int16 ), 1, bitOutFile );
+        WRITE_ENCODE_OUTPUT(&nBytes, sizeof(SKP_int16) * 1);
     }
 
     /* Free Encoder */
     free( psEnc );
-
-    fclose( speechInFile );
-    fclose( bitOutFile   );
 
     filetime  = totPackets * 1e-3 * packetSize_ms;
     avg_rate  = 8.0 / packetSize_ms * sumBytes       / totPackets;
@@ -314,5 +309,9 @@ void Encode(
         printf( "\n\n" );
     }
 
-    return;
+    napi_status status;
+    napi_value result;
+    status = napi_create_buffer_copy(env, size, output, &output_temp_pointer, &result);
+    assert(status == napi_ok);
+    return result;
 }
