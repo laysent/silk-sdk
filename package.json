@@ -1,12 +1,16 @@
 {
   "name": "silk-sdk",
-  "version": "0.1.1",
+  "version": "0.2.0",
   "description": "node-gyp version of silk sdk",
   "main": "index.js",
+  "bin": "cli.js",
   "scripts": {
     "install": "node-gyp rebuild"
   },
-  "keywords": ["silk", "silk sdk"],
+  "keywords": [
+    "silk",
+    "silk sdk"
+  ],
   "author": "LaySent",
   "license": "MIT",
   "gypfile": true,
@@ -15,6 +19,7 @@
     "url": "git+https://github.com/laysent/silk-sdk.git"
   },
   "dependencies": {
-    "bindings": "^1.3.1"
+    "bindings": "^1.3.1",
+    "cac": "^6.3.12"
   }
 }
