@@ -1,6 +1,6 @@
 {
   "name": "silk-sdk",
-  "version": "0.2.1",
+  "version": "0.2.2",
   "description": "node-gyp version of silk sdk",
   "main": "index.js",
   "bin": "cli.js",
