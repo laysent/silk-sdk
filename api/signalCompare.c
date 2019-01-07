@@ -84,7 +84,7 @@ void Bwexpander(
 }
 #endif
 
-int Compare(napi_env env, void* refInStream, size_t refTotal, void* testInStream, size_t testTotal, SKP_int32 diff, SKP_int32 Fs_Hz, SKP_int32 quiet)
+int Compare(napi_env env, void* _refInStream, size_t refTotal, void* _testInStream, size_t testTotal, SKP_int32 diff, SKP_int32 Fs_Hz, SKP_int32 quiet)
 {
     SKP_int   n, i, counterRef, counterTest;
     SKP_int   nFrames = 0, isUnequal = 0;
@@ -96,6 +96,10 @@ int Compare(napi_env env, void* refInStream, size_t refTotal, void* testInStream
     SKP_float refWin[WIN_LENGTH_MS * MAX_FS_KHZ];
     SKP_float autoCorr[LPC_ORDER + 1], LPC_Coef[LPC_ORDER];
     char error_message[250];
+    char *refInStream, *testInStream;
+
+    refInStream = (char*)_refInStream;
+    testInStream = (char*)_testInStream;
 
     Fs_kHz = SKP_DIV32_16( Fs_Hz, 1000 );
 

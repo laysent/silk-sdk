@@ -111,12 +111,12 @@ unsigned long DecoderGetHighResolutionTime() /* O: time in usec*/
 /* Seed for the random number generator, which is used for simulating packet loss */
 static SKP_int32 rand_seed = 1;
 
-napi_value Decode(napi_env env, void* inStream, size_t total, SKP_int32 quiet, SKP_float loss_prob, SKP_int32 API_Fs_Hz)
+napi_value Decode(napi_env env, void* _inStream, size_t total, SKP_int32 quiet, SKP_float loss_prob, SKP_int32 API_Fs_Hz)
 {
     unsigned long tottime, starttime;
     double    filetime;
     size_t    index = 0, size = 0;
-    void *output = NULL, *output_temp_pointer;
+    char *output = NULL, *output_temp_pointer, *inStream;
     SKP_int32 totPackets, i, k;
     SKP_int16 ret, len, tot_len;
     SKP_int16 nBytes;
@@ -132,6 +132,8 @@ napi_value Decode(napi_env env, void* inStream, size_t total, SKP_int32 quiet, S
     void      *psDec;
     SKP_int32 frames, lost;
     SKP_SILK_SDK_DecControlStruct DecControl;
+
+    inStream = (char*)_inStream;
 
     if( !quiet ) {
         printf("********** Silk Decoder (Fixed Point) v %s ********************\n", SKP_Silk_SDK_get_version());
@@ -458,7 +460,7 @@ napi_value Decode(napi_env env, void* inStream, size_t total, SKP_int32 quiet, S
 
     napi_status status;
     napi_value result;
-    status = napi_create_buffer_copy(env, size, output, &output_temp_pointer, &result);
+    status = napi_create_buffer_copy(env, size, output, NULL, &result);
     assert(status == napi_ok);
     return result;
 }

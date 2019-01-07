@@ -106,7 +106,7 @@ unsigned long EncoderGetHighResolutionTime() /* O: time in usec*/
 
 napi_value Encode(
     napi_env env,
-    void* inStream,
+    void* _inStream,
     size_t total,
     SKP_int32 API_fs_Hz,
     SKP_int32 max_internal_fs_Hz,
@@ -123,7 +123,7 @@ napi_value Encode(
     unsigned long tottime, starttime;
     double    filetime;
     size_t    counter, index = 0, size = 0;
-    void *output = NULL, *output_temp_pointer;
+    char *output = NULL, *output_temp_pointer, *inStream;
     SKP_int32 k, totPackets, totActPackets, ret;
     SKP_int16 nBytes;
     double    sumBytes, sumActBytes, avg_rate, act_rate, nrg;
@@ -135,6 +135,8 @@ napi_value Encode(
 #ifdef _SYSTEM_IS_BIG_ENDIAN
     SKP_int16 nBytes_LE;
 #endif
+
+    inStream = (char*)_inStream;
 
     /* default settings */
     SKP_int32 smplsSinceLastPacket;
@@ -311,7 +313,7 @@ napi_value Encode(
 
     napi_status status;
     napi_value result;
-    status = napi_create_buffer_copy(env, size, output, &output_temp_pointer, &result);
+    status = napi_create_buffer_copy(env, size, output, NULL, &result);
     assert(status == napi_ok);
     return result;
 }
