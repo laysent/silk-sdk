@@ -93,7 +93,7 @@ cli.command('encode [input] [output]', 'encode speech input to silk format')
         loss: { type: 'range', min: 0, max: 100 },
         complexity: { type: 'oneOf', oneOf: [0, 1, 2] },
       });
-      silk.decode(input, output, options);
+      silk.encode(input, output, options);
     } catch (e) {
       console.error(`[ERROR]: ${e.message}`);
     }
